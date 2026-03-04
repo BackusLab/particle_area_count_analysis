@@ -8,13 +8,13 @@
 6. Run the script.
 7. You should have a new folder w/ in your specified directory called "[microscopy image name] output".
 8. The output folder should contain 13 files (for 2 channels):
-     For each channel:
-        Original image
-        Brightened image
-        Thresholded image (black & white)
-        Outline image (outline of thresholded particles)
-        Overlay image (thresholded image + highlighted outline)
-        CSV file w/ area + intensity of each particle 
-     CSV file w/ summary of both channels (count, total area, avg size, % area, intensity)
+   - For each channel:
+        - Original image
+        - Brightened image
+        - Thresholded image (black & white)
+        - Outline image (outline of thresholded particles)
+        - Overlay image (thresholded image + highlighted outline)
+        - CSV file w/ area + intensity of each particle 
+   - CSV file w/ summary of both channels (count, total area, avg size, % area, intensity)
 9. Optional: If you would like to combine all the summary tables from multiple outputs, you can use the stress_granule_analysis.py.ipynb file.
 10. Optional: If you would like histograms from the combined summary table, you can use the stress_granule_data_visualization.RMD file.
