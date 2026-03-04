@@ -2,9 +2,12 @@
 2. Drag particle_area_count.py file and the microscopy image (czi) into Fiji ImageJ (note: don't split channels beforehand, just use default settings).
 3. Add the pathname of the directory that you want your output folder to be (script will automatically make an output folder in the specified directory, you don't have to make one beforehand).
 4. Adjust settings (constants) as needed (recommend testing on one image first).
-5. Run the script.
-6. You should have a new folder w/ in your specified directory called "[microscopy image name] output".
-7. The output folder should contain 13 files (for 2 channels):
+   - IMG_MAX → Recommend around 80-120, lower the max to make image brighter (only for visualization purposes if the picture is dark)
+   - THRESHOLD_MIN → Recommend 17-20 to filter small particles (eg. p62 bodies), 7-10 for larger particles (eg. Nuclei), lower threshold to    recognize larger particles 
+   - FILTER_MIN → Filters out noise, recommend 0.1 for particles (eg. p62 bodies), 5 for nuclei
+6. Run the script.
+7. You should have a new folder w/ in your specified directory called "[microscopy image name] output".
+8. The output folder should contain 13 files (for 2 channels):
      For each channel:
         Original image
         Brightened image
@@ -13,5 +16,5 @@
         Overlay image (thresholded image + highlighted outline)
         CSV file w/ area + intensity of each particle 
      CSV file w/ summary of both channels (count, total area, avg size, % area, intensity)
-8. Optional: If you would like to combine all the summary tables from multiple outputs, you can use the stress_granule_analysis.py.ipynb file.
-9. Optional: If you would like histograms from the combined summary table, you can use the stress_granule_data_visualization.RMD file.
+9. Optional: If you would like to combine all the summary tables from multiple outputs, you can use the stress_granule_analysis.py.ipynb file.
+10. Optional: If you would like histograms from the combined summary table, you can use the stress_granule_data_visualization.RMD file.
