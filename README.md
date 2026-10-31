@@ -1,5 +1,7 @@
 Last edited: 10/30/26
 
+Quick video demo: https://drive.google.com/file/d/19mXD4BDA9yIGpMhHgECvw_bSzrhsqy1o/view?usp=sharing
+
 1. Download the "particle_area_count.py" file.
 2. Drag or open the "particle_area_count.py" file into Fiji ImageJ.
 3. Adjust settings (constants) as needed (recommend testing on one image first).
