@@ -1,15 +1,14 @@
 '''
 Author: Lucia Liu
 Purpose: Finds the number of particles and area of each particle for each channel in a .czi file
-Notes:
-- Image that is dragged in must be multi-channel and .czi
-- For the output folder, can do 2 options:
-    Option 1: Choose a directory beforehand (uncomment out "Choose directory" code section) and comment out "Make directory" section
-    Option 2: Let the script make a directory (paste your target base directory pathname where specified) --> easier for large batches
-- Sometimes if the output identify really abnormal large chunks, first try rerunning since it might be a system glitch
-Last edited: 3/2/26
+Input: Single 2 channel .czi file OR a folder of .czi files
+Last edited: 10/30/26
 '''
 
+import os
+from loci.plugins import BF
+from ij.io import OpenDialog
+from ij.gui import GenericDialog
 from ij import IJ, WindowManager, ImagePlus
 from ij.io import DirectoryChooser, FileSaver
 from ij.measure import ResultsTable
@@ -17,15 +16,27 @@ from ij.gui import Overlay, Roi
 from ij.plugin.frame import RoiManager
 from java.io import File
 
-BASE_DIR = '/Users/lucialiu/Downloads/2025.12.16 Ctrl-SHKBP1 DDC diet 2wks p62/czi/40x' # Replace with base folder directory (just copy pathname)
 
-C0_IMG_MAX = 80 # lower max to brighten image
-C0_THRESHOLD_MIN = 17 # lower threshold to recognize more particles
+# OPTIONAL: type paths here to skip the popups. Leave as None to be prompted.
+INPUT_PATH = None       # single .czi file OR a folder of .czi files
+OUTPUT_DIR = None       # folder where the "<imagename>_output" subfolders get saved
+
+# EDIT THE FOLLOWING VARIABLES AS NEEDED:
+'''
+THRESHOLD_MIN → Recommend 17-20 to filter small particles (eg. p62 bodies), 7-10 for larger particles (eg. Nuclei), lower threshold to recognize larger particles 
+FILTER_MIN → Filters out noise, recommend 0.1 for particles (eg. p62 bodies), 5 for nuclei
+IMG_MAX → Recommend around 80-120, lower the max to make image brighter (NOTE: Does not affect analysis, only for visualization purposes if the picture is dark)
+'''
+# Channel 1
+C0_THRESHOLD_MIN = 17  
 C0_FILTER_MIN = 0.1
-
-C1_IMG_MAX = 120 # lower max to brighten image 
-C1_THRESHOLD_MIN = 9 # lower threshold to recognize more particles 
+C0_IMG_MAX = 80         
+ 
+# Channel 2 (eg. Nuclei)
+C1_THRESHOLD_MIN = 9    
 C1_FILTER_MIN = 5
+C1_IMG_MAX = 120        
+
 
 def adjust_brightness(image, max):
     edited_image = image.duplicate()
@@ -54,11 +65,11 @@ def add_scale_bar(img, color):
 def analyze_particles(image, min_size, channel_num):
     # Set measurements
     IJ.run(image, "Set Measurements...", "area mean redirect=[" + image.getTitle() + "]")
-	    # redirect to original image (to get the mean gray value)
-	    # area = area of particle in micrometers
-	    # mean = mean gray value (brightness aka intensity)
+        # redirect to original image (to get the mean gray value)
+        # area = area of particle in micrometers
+        # mean = mean gray value (brightness aka intensity)
 
-	# Analyze particles
+    # Analyze particles
     if channel_num == 0:
         IJ.run(image, "Analyze Particles...",
                "size={}-Infinity show=Outlines add display summarize include redirect=[{}]".format(min_size, image.getTitle()))
@@ -86,7 +97,6 @@ def analyze_particles(image, min_size, channel_num):
     rm.setVisible(False)
 
     return outline, overlay, results, summary
-
 
 # channel_num starts at 0
 def analyze_channel(channel_num, image_titles, img_max, threshold_min, filter_min, output_dir):
@@ -155,31 +165,22 @@ def analyze_channel(channel_num, image_titles, img_max, threshold_min, filter_mi
         results_window.close()
 
     return summary
-
-def main():
-    '''
-    # Choose directory
-    dc = DirectoryChooser("Choose folder to save output files in.")
-    output_dir = dc.getDirectory()
-
-    if output_dir is None:
-        raise ValueError("No output directory selected.")
-    '''
-
-    # Get input image
-    imp = IJ.getImage() # gets dragged-in image
-
-    if imp.getNChannels() == 1:
-        image_titles = [imp.getTitle()]
-    else:
-        IJ.run(imp, "Split Channels", "")
-        image_titles = WindowManager.getImageTitles()
-
-    if not imp.getTitle().lower().endswith(".czi"):
+    
+def process_image(imp, base_output_dir):
+    # Runs analysis on already-open .czi image
+    name = imp.getTitle()
+    if not name.lower().endswith(".czi"):
         raise ValueError("Incompatible file type - must be a two-channel .czi file")
 
-    # Make new directory - Comment out if you want to choose directory instead
-    output_dir = File(BASE_DIR + File.separator + imp.getTitle().replace(".czi", "") + "_output")
+    # Split channels (original image closes, channel windows replace it)
+    if imp.getNChannels() == 1:
+        image_titles = [name]
+    else:
+        IJ.run(imp, "Split Channels", "")
+        image_titles = sorted(WindowManager.getImageTitles())  # C1-..., C2-...
+
+    # Each image gets its own subfolder inside the chosen output directory
+    output_dir = File(base_output_dir + File.separator + name.replace(".czi", "") + "_output")
     output_dir.mkdirs()
     output_dir = output_dir.getAbsolutePath() + File.separator
 
@@ -188,9 +189,106 @@ def main():
     summary = analyze_channel(1, image_titles, C1_IMG_MAX, C1_THRESHOLD_MIN, C1_FILTER_MIN, output_dir)
 
     # Save summary
-    summary.save(output_dir + imp.getTitle().replace(".czi", "") + "_summary.csv")
+    summary.save(output_dir + name.replace(".czi", "") + "_summary.csv")
     summary_window = WindowManager.getFrame("Summary")
     if summary_window is not None:
         summary_window.close()
 
+
+def open_czi(path):
+    imp = BF.openImagePlus(path)[0]
+    imp.setTitle(os.path.basename(path))
+    imp.show()
+    return imp
+
+
+def process_folder(folder, base_output_dir):
+    files = sorted(f for f in os.listdir(folder)
+                   if f.lower().endswith(".czi") and not f.startswith("."))  # skips Mac "._" files
+    if not files:
+        raise ValueError("No .czi files found in " + folder)
+
+    failed = []
+    for i, fname in enumerate(files):
+        IJ.log("Processing {}/{}: {}".format(i + 1, len(files), fname))
+        IJ.run("Close All")  # avoid leftover windows being mistaken for channels
+        try:
+            imp = open_czi(os.path.join(folder, fname))
+            process_image(imp, base_output_dir)
+        except Exception as e:
+            IJ.log("FAILED on {}: {}".format(fname, e))
+            failed.append(fname)
+        finally:
+            IJ.run("Close All")
+
+    IJ.log("Done. {} processed, {} failed.".format(len(files) - len(failed), len(failed)))
+    for f in failed:
+        IJ.log("  failed: " + f)
+
+
+def choose_input():
+    if INPUT_PATH:  # manually set, skip popup
+        if not os.path.exists(INPUT_PATH):
+            raise ValueError("INPUT_PATH does not exist: " + INPUT_PATH)
+        return INPUT_PATH
+
+    # Ask whether to pick one image or a whole folder
+    gd = GenericDialog("Input")
+    gd.addMessage("Choose your input image/folder.")
+    gd.addChoice("Input type:", ["Single image", "Folder of images"], "Single image")
+    gd.showDialog()
+    if gd.wasCanceled():
+        raise ValueError("No input selected.")
+    input_type = gd.getNextChoice()
+
+    if input_type == "Single image":
+        od = OpenDialog("Choose your input image")
+        if od.getFileName() is None:
+            raise ValueError("No input selected.")
+        return od.getDirectory() + od.getFileName()
+    else:
+        dc = DirectoryChooser("Choose your input folder")
+        folder = dc.getDirectory()
+        if folder is None:
+            raise ValueError("No input selected.")
+        return folder
+        
+
+def choose_output():
+    if OUTPUT_DIR:  # manually set, skip popup
+        File(OUTPUT_DIR).mkdirs()  # create it if it doesn't exist yet
+        return OUTPUT_DIR
+
+    IJ.showMessage("Output", "Choose the folder to save output files in.")
+    dc = DirectoryChooser("Choose folder to save output files in.")
+    output_dir = dc.getDirectory()
+    if output_dir is None:
+        raise ValueError("No output directory selected.")
+    return output_dir
+
+
+def main():
+    # Priority: manual INPUT_PATH > already-open image > input popup
+    if INPUT_PATH:
+        imp = None
+        path = choose_input()
+    elif WindowManager.getImageCount() > 0:
+        imp = IJ.getImage()
+        path = None
+    else:
+        imp = None
+        path = choose_input()
+
+    base_output_dir = choose_output()
+
+    if imp is not None:
+        process_image(imp, base_output_dir)
+    elif os.path.isdir(path):
+        process_folder(path, base_output_dir)
+    else:
+        IJ.run("Close All")
+        imp = open_czi(path)
+        process_image(imp, base_output_dir)
+
 main()
+
